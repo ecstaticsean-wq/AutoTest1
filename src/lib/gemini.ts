@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { GenerateRequestBody } from "@/types/generate";
 
-export const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 export const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
