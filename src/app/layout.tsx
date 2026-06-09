@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "상품 타게팅 홍보 AI 직원 | 자동 마케팅 카피 생성",
+  title: "딸깍 쓰레드 | Threads 소통형 자동화",
   description:
-    "상품 정보를 입력하면 AI가 타겟 고객을 분석하고 쓰레드·인스타·블로그 홍보 글을 자동으로 생성합니다.",
-  keywords: "홍보글 자동생성, AI 마케팅, 쓰레드 글쓰기, 블로그 글쓰기, 이커머스 셀러",
+    "제품 리스트를 업로드하면 AI가 Threads 소통형 글을 생성하고 자동으로 게시·댓글까지 관리합니다.",
+  keywords: "쓰레드 자동화, AI 마케팅, Threads 글쓰기, 소통형 SNS, 이커머스 셀러",
 };
 
 export default function RootLayout({

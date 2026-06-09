@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  name           String?
+  hashedPassword String?
+  createdAt      DateTime       @default(now())
+  threadsToken   ThreadsToken?
+  geminiKey      UserGeminiKey?
+  posts          Post[]
+  subscription   Subscription?
+}
+
+model ThreadsToken {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threadsUserId  String
+  accessToken    String
+  tokenExpiresAt DateTime
+  updatedAt      DateTime @updatedAt
+}
+
+model UserGeminiKey {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedApiKey String
+  addedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan             Plan     @default(FREE)
+  stripeCustomerId String?
+  updatedAt        DateTime @updatedAt
+}
+
+model Post {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productName     String
+  salesUrl        String
+  generatedText   String              @db.Text
+  postFormat      String
+  threadsPostId   String?             @unique
+  publishedAt     DateTime?
+  replyWindowEnds DateTime?
+  replyJobStatus  ReplyJobStatus      @default(PENDING)
+  createdAt       DateTime            @default(now())
+  replies         ReplyTracking[]
+  snapshots       AnalyticsSnapshot[]
+}
+
+model ReplyTracking {
+  id               String      @id @default(cuid())
+  postId           String
+  post             Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  threadsCommentId String      @unique
+  commentText      String      @db.Text
+  replyText        String?     @db.Text
+  repliedAt        DateTime?
+  status           ReplyStatus @default(PENDING)
+  createdAt        DateTime    @default(now())
+}
+
+model AnalyticsSnapshot {
+  id             String         @id @default(cuid())
+  postId         String
+  post           Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  snapshotPeriod SnapshotPeriod
+  reach          Int?
+  impressions    Int?
+  replies        Int?
+  reposts        Int?
+  likes          Int?
+  capturedAt     DateTime       @default(now())
+
+  @@unique([postId, snapshotPeriod])
+}
+
+enum ReplyJobStatus {
+  PENDING
+  ACTIVE
+  DONE
+  FAILED
+}
+
+enum ReplyStatus {
+  PENDING
+  REPLIED
+  FAILED
+}
+
+enum SnapshotPeriod {
+  DAY_1
+  DAY_3
+  DAY_7
+  DAY_30
+}
+
+enum Plan {
+  FREE
+  BASIC
+  PRO
+}
