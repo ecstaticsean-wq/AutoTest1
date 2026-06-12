@@ -31,8 +31,9 @@ export function buildOAuthUrl(redirectUri: string): string {
   const scopes = [
     "threads_basic",
     "threads_content_publish",
-    "threads_read_engagement",
     "threads_manage_insights",
+    "threads_manage_replies",
+    "threads_read_replies",
   ].join(",");
 
   const params = new URLSearchParams({
