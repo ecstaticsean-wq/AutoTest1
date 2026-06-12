@@ -9,7 +9,7 @@ import {
 } from "@/lib/excel";
 import type { ThreadsGenerateResponse } from "@/types/generate";
 
-type ItemStatus = "pending" | "generating" | "done" | "error" | "skipped";
+type ItemStatus = "pending" | "generating" | "done" | "error" | "skipped" | "scheduled";
 
 type GeneratedItem = {
   row: ParsedProductRow;
@@ -22,17 +22,32 @@ type Props = {
   hasThreadsToken: boolean;
 };
 
+// Format a Date as "YYYY-MM-DDTHH:mm" in local time for <input type="datetime-local">
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 export default function ThreadsUploadFlow({ hasThreadsToken }: Props) {
   const [items, setItems] = useState<GeneratedItem[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<{ rowNumber: number; message: string }[]>([]);
   const [running, setRunning] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [scheduleStartAt, setScheduleStartAt] = useState(() =>
+    toDatetimeLocalValue(new Date(Date.now() + 10 * 60 * 1000))
+  );
+  const [scheduleInterval, setScheduleInterval] = useState(60);
+  const [scheduling, setScheduling] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const doneCount = items.filter((i) => i.status === "done").length;
   const errorCount = items.filter((i) => i.status === "error").length;
   const skippedCount = items.filter((i) => i.status === "skipped").length;
+  const scheduledCount = items.filter((i) => i.status === "scheduled").length;
   const progress = items.length > 0 ? (doneCount / items.length) * 100 : 0;
 
   async function handleFile(file: File) {
@@ -125,6 +140,64 @@ export default function ThreadsUploadFlow({ hasThreadsToken }: Props) {
     }
   }
 
+  function toggleSelected(index: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  async function scheduleSelected() {
+    const targets = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item, index }) => item.status === "done" && selected.has(index));
+
+    if (targets.length === 0 || !hasThreadsToken) return;
+
+    const startAt = new Date(scheduleStartAt);
+    if (Number.isNaN(startAt.getTime())) {
+      alert("발행 시작 시간을 확인해주세요");
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      const res = await fetch("/api/threads/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: targets.map(({ item }) => ({
+            postText: item.result!.postText,
+            productName: item.row.productName,
+            salesUrl: item.row.salesUrl,
+            postFormat: item.result!.postFormat,
+          })),
+          startAt: startAt.toISOString(),
+          intervalMinutes: scheduleInterval,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = [...items];
+        for (const { index } of targets) {
+          updated[index] = { ...updated[index], status: "scheduled" };
+        }
+        setItems(updated);
+        setSelected(new Set());
+        alert(`${targets.length}개 글이 예약 발행 등록되었습니다 🎉`);
+      } else {
+        const data = await res.json();
+        alert(`예약 실패: ${data.error}`);
+      }
+    } catch {
+      alert("네트워크 오류가 발생했습니다");
+    } finally {
+      setScheduling(false);
+    }
+  }
+
   async function downloadErrors() {
     const errorRows = items
       .filter((i) => i.status === "error")
@@ -201,6 +274,7 @@ export default function ThreadsUploadFlow({ hasThreadsToken }: Props) {
                 <p className="text-slate-400 text-sm mt-0.5">
                   완료 {doneCount}개 / 실패 {errorCount}개
                   {skippedCount > 0 && ` / 게시됨 ${skippedCount}개`}
+                  {scheduledCount > 0 && ` / 예약됨 ${scheduledCount}개`}
                 </p>
               )}
             </div>
@@ -234,6 +308,47 @@ export default function ThreadsUploadFlow({ hasThreadsToken }: Props) {
         </div>
       )}
 
+      {/* 일괄 예약 발행 */}
+      {hasThreadsToken && doneCount > 0 && (
+        <div className="bg-white/10 border border-white/20 rounded-2xl p-6">
+          <h2 className="text-white font-semibold text-lg mb-1">일괄 예약 발행</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            아래 글 목록에서 발행할 글을 선택한 뒤, 시작 시간과 간격을 정하면 순서대로 자동
+            발행됩니다.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-slate-400 text-xs mb-1">발행 시작 시간</label>
+              <input
+                type="datetime-local"
+                value={scheduleStartAt}
+                onChange={(e) => setScheduleStartAt(e.target.value)}
+                className="bg-black/30 border border-white/20 rounded-lg px-3 py-2 text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 text-xs mb-1">발행 간격 (분)</label>
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={scheduleInterval}
+                onChange={(e) => setScheduleInterval(Number(e.target.value))}
+                className="bg-black/30 border border-white/20 rounded-lg px-3 py-2 text-white text-sm w-24"
+              />
+            </div>
+            <button
+              onClick={scheduleSelected}
+              disabled={scheduling || selected.size === 0}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              {scheduling ? "예약 중…" : `선택한 ${selected.size}개 예약 발행`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 결과 카드 목록 */}
       {items.filter((i) => i.status === "done").length > 0 && (
         <div className="space-y-4">
@@ -245,15 +360,25 @@ export default function ThreadsUploadFlow({ hasThreadsToken }: Props) {
                 className="bg-white/10 border border-white/20 rounded-2xl p-5"
               >
                 <div className="flex items-start justify-between gap-4 mb-3">
-                  <div>
-                    <p className="text-white font-medium">{item.row.productName}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs">
-                        {item.result!.postFormat}
-                      </span>
-                      <span className="text-slate-500 text-xs truncate max-w-xs">
-                        {item.result!.engagementHook}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    {hasThreadsToken && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(index)}
+                        onChange={() => toggleSelected(index)}
+                        className="mt-1.5 w-4 h-4 accent-purple-600"
+                      />
+                    )}
+                    <div>
+                      <p className="text-white font-medium">{item.row.productName}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs">
+                          {item.result!.postFormat}
+                        </span>
+                        <span className="text-slate-500 text-xs truncate max-w-xs">
+                          {item.result!.engagementHook}
+                        </span>
+                      </div>
                     </div>
                   </div>
 

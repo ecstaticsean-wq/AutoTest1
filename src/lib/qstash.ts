@@ -1,5 +1,5 @@
 import "server-only";
-import { Client } from "@upstash/qstash";
+import { Client, Receiver } from "@upstash/qstash";
 
 let _client: Client | null = null;
 
@@ -12,8 +12,39 @@ function getClient(): Client {
   return _client;
 }
 
+export function getReceiver(): Receiver {
+  const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
+  const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
+  if (!currentKey || !nextKey) {
+    throw new Error("QStash signing keys not set");
+  }
+  return new Receiver({ currentSigningKey: currentKey, nextSigningKey: nextKey });
+}
+
 function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+}
+
+// Schedule a one-time auto-publish job for a SCHEDULED post. Returns the QStash message id.
+export async function scheduleAutoPublish(postId: string, scheduledAt: Date): Promise<string> {
+  const client = getClient();
+  const baseUrl = getBaseUrl();
+
+  const delaySeconds = Math.max(1, Math.round((scheduledAt.getTime() - Date.now()) / 1000));
+
+  const { messageId } = await client.publishJSON({
+    url: `${baseUrl}/api/jobs/auto-publish`,
+    delay: delaySeconds,
+    body: { postId },
+  });
+
+  return messageId;
+}
+
+// Cancel a previously scheduled QStash message (best-effort)
+export async function cancelScheduledMessage(messageId: string): Promise<void> {
+  const client = getClient();
+  await client.messages.delete(messageId);
 }
 
 // Schedule comment polling: every 1 min × 10 times (= 10-minute window)

@@ -2,14 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import {
-  createTextContainer,
-  publishContainer,
-} from "@/lib/threads-api";
-import {
-  schedulePollReplies,
-  scheduleAnalyticsSnapshots,
-} from "@/lib/qstash";
+import { executePublish, PublishError } from "@/lib/publish-post";
+
+export const maxDuration = 60;
 
 const PublishSchema = z.object({
   postText: z.string().min(1),
@@ -44,41 +39,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Step 1: create container
-  let containerId: string;
-  try {
-    const container = await createTextContainer(
-      token.threadsUserId,
-      postText,
-      token.accessToken
-    );
-    containerId = container.id;
-  } catch (err) {
-    console.error("[publish] container creation failed", err);
-    return NextResponse.json({ error: "Threads 글 생성 실패" }, { status: 502 });
-  }
-
-  // Step 2: 30-second wait (Meta requirement)
-  await new Promise((r) => setTimeout(r, 30_000));
-
-  // Step 3: publish
-  let threadsPostId: string;
-  try {
-    const result = await publishContainer(
-      token.threadsUserId,
-      containerId,
-      token.accessToken
-    );
-    threadsPostId = result.id;
-  } catch (err) {
-    console.error("[publish] publish failed", err);
-    return NextResponse.json({ error: "Threads 게시 실패" }, { status: 502 });
-  }
-
-  const publishedAt = new Date();
-  const replyWindowEnds = new Date(publishedAt.getTime() + 10 * 60 * 1000);
-
-  // Save to DB
   const post = await db.post.create({
     data: {
       userId: session.userId,
@@ -86,22 +46,16 @@ export async function POST(req: NextRequest) {
       salesUrl,
       generatedText: postText,
       postFormat,
-      threadsPostId,
-      publishedAt,
-      replyWindowEnds,
-      replyJobStatus: "ACTIVE",
+      status: "SCHEDULED",
     },
   });
 
-  // Schedule background jobs (best-effort: don't fail publish if QStash unavailable)
   try {
-    await Promise.all([
-      schedulePollReplies(post.id, publishedAt),
-      scheduleAnalyticsSnapshots(post.id, publishedAt),
-    ]);
+    await executePublish(post.id);
   } catch (err) {
-    console.error("[publish] QStash scheduling failed", err);
+    const message = err instanceof PublishError ? err.message : "Threads 게시 실패";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  return NextResponse.json({ success: true, postId: post.id, threadsPostId });
+  return NextResponse.json({ success: true, postId: post.id });
 }

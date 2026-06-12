@@ -54,6 +54,9 @@ model Post {
   salesUrl        String
   generatedText   String              @db.Text
   postFormat      String
+  status          PostStatus          @default(PUBLISHED)
+  scheduledAt     DateTime?
+  qstashMessageId String?
   threadsPostId   String?             @unique
   publishedAt     DateTime?
   replyWindowEnds DateTime?
@@ -88,6 +91,12 @@ model AnalyticsSnapshot {
   capturedAt     DateTime       @default(now())
 
   @@unique([postId, snapshotPeriod])
+}
+
+enum PostStatus {
+  SCHEDULED
+  PUBLISHED
+  FAILED
 }
 
 enum ReplyJobStatus {

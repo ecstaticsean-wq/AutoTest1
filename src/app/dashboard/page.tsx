@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import ThreadsUploadFlow from "@/components/ThreadsUploadFlow";
+import ScheduledPosts from "@/components/ScheduledPosts";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -13,6 +14,18 @@ export default async function DashboardPage() {
   });
 
   const hasThreadsToken = !!user?.threadsToken;
+
+  const scheduledPosts = await db.post.findMany({
+    where: { userId: session.userId, status: "SCHEDULED" },
+    orderBy: { scheduledAt: "asc" },
+    select: {
+      id: true,
+      productName: true,
+      generatedText: true,
+      postFormat: true,
+      scheduledAt: true,
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -47,6 +60,13 @@ export default async function DashboardPage() {
           하면 더 원활하게 이용하실 수 있습니다.
         </div>
       )}
+
+      <ScheduledPosts
+        posts={scheduledPosts.map((p) => ({
+          ...p,
+          scheduledAt: new Date(p.scheduledAt!).toISOString(),
+        }))}
+      />
 
       <ThreadsUploadFlow hasThreadsToken={hasThreadsToken} />
     </div>
