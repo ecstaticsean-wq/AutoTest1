@@ -61,7 +61,7 @@ export async function exchangeCodeForToken(
     code,
   });
 
-  const res = await fetch(`${THREADS_AUTH_BASE}/access_token`, {
+  const res = await fetch(`${THREADS_BASE}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
