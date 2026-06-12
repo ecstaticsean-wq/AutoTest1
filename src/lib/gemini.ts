@@ -38,6 +38,7 @@ function buildThreadsInstruction(input: ThreadsGenerateRequest): string {
     `1. 반드시 친근한 반말체로 작성 (예: "~야", "~지", "~거든", "~잖아")\n` +
     `2. 첫 줄은 무조건 스크롤을 멈추게 만드는 후킹 문장\n` +
     `3. 본문은 3~5줄로 간결하게 (Threads 최적 분량)\n` +
+    `3-1. postText는 공백과 URL, 해시태그를 모두 포함해서 반드시 500자 이내로 작성 (Threads 글자수 제한)\n` +
     `4. 마지막은 반드시 댓글을 유도하는 문장이나 질문으로 마무리\n` +
     `5. 판매URL(${salesUrl})을 자연스럽게 포함\n` +
     `6. 해시태그는 2~3개만, 핵심 키워드 위주로\n\n` +

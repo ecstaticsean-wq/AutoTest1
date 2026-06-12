@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "입력 형식이 올바르지 않습니다" }, { status: 400 });
   }
 
-  const { postText, productName, salesUrl, postFormat } = parsed.data;
+  const { productName, salesUrl, postFormat } = parsed.data;
+  const postText = parsed.data.postText.slice(0, 500);
 
   const token = await db.threadsToken.findUnique({
     where: { userId: session.userId },
